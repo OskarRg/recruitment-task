@@ -1,0 +1,13 @@
+[project]
+name = "recruitment-task"
+version = "0.1.0"
+requires-python = ">=3.14"
+dependencies = [
+    "pandas>=3.1.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.5",
+]
