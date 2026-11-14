@@ -6,7 +6,7 @@ import pandas as pd
 
 from solution import add_virtual_column
 
-logger = logging.getLogger(__name__)
+logger: logging.Logger = logging.getLogger(__name__)
 
 _BASE_DIR: Path = Path(__file__).resolve().parent
 _DEFAULT_INPUT_PATH: Path = _BASE_DIR / "sales.csv"
@@ -54,7 +54,7 @@ def _normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
     :return: DataFrame with normalized column names.
     :raises ValueError: If duplicate column names occur or any required column is missing.
     """
-    normalized_df = df.copy()
+    normalized_df: pd.DataFrame = df.copy()
     normalized_df.columns = [
         "_".join(str(col).lower().split()) for col in normalized_df.columns
     ]
@@ -65,7 +65,7 @@ def _normalize_column_names(df: pd.DataFrame) -> pd.DataFrame:
         )
         raise ValueError(f"Duplicate columns after normalization: {duplicates}")
 
-    missing_columns = _REQUIRED_COLUMNS - set(normalized_df.columns)
+    missing_columns: frozenset[str] = _REQUIRED_COLUMNS - set(normalized_df.columns)
     if missing_columns:
         raise ValueError(f"Missing required columns: {sorted(missing_columns)}")
 
@@ -81,10 +81,12 @@ def _filter_valid_order_rows(df: pd.DataFrame) -> pd.DataFrame:
     """
     cleaned_order_ids: pd.Series = df["order_id"].str.strip()
     is_valid_order: pd.Series = cleaned_order_ids.str.match(_ORDER_ID_PATTERN, na=False)
-    removed_count: int = int((~is_valid_order).sum())
+    removed_count: int = (~is_valid_order).sum()
 
     if removed_count > 0:
-        invalid_samples = cleaned_order_ids.loc[~is_valid_order].unique().tolist()[:5]
+        invalid_samples: list[str] = (
+            cleaned_order_ids.loc[~is_valid_order].unique().tolist()[:5]
+        )
         logger.info(
             "Removed %d rows with invalid order_id format (samples: %s).",
             removed_count,
@@ -118,12 +120,14 @@ def _normalize_text_columns(df: pd.DataFrame) -> pd.DataFrame:
     :return: DataFrame with normalized `order_id`, `region`, and `product` columns.
     :raises ValueError: If any `product` value is empty after stripping.
     """
-    text_df = df.copy()
+    text_df: pd.DataFrame = df.copy()
     text_df["order_id"] = text_df["order_id"].str.strip()
     text_df["region"] = text_df["region"].str.split().str.join(" ").str.title()
     text_df["product"] = text_df["product"].str.split().str.join(" ")
 
-    invalid_region_mask = text_df["region"].str.lower().isin(_PLACEHOLDER_VALUES)
+    invalid_region_mask: pd.Series = (
+        text_df["region"].str.lower().isin(_PLACEHOLDER_VALUES)
+    )
     unknown_count: int = int(invalid_region_mask.sum())
     if unknown_count > 0:
         text_df["region"] = text_df["region"].mask(invalid_region_mask, "Unknown")
@@ -132,7 +136,9 @@ def _normalize_text_columns(df: pd.DataFrame) -> pd.DataFrame:
             unknown_count,
         )
 
-    invalid_product_mask = text_df["product"].str.lower().isin(_PLACEHOLDER_VALUES)
+    invalid_product_mask: pd.Series = (
+        text_df["product"].str.lower().isin(_PLACEHOLDER_VALUES)
+    )
     if invalid_product_mask.any():
         raise ValueError("Empty 'product' values encountered.")
 
@@ -164,12 +170,12 @@ def _parse_numeric_series(
     if empty_replacement is not None:
         cleaned_str = cleaned_str.mask(cleaned_str == "", empty_replacement)
 
-    parsed = pd.Series(
+    parsed: pd.Series = pd.Series(
         pd.to_numeric(cleaned_str, errors="coerce"),
         index=cleaned_str.index,
     )
     if not allow_unparseable and parsed.isna().any():
-        bad_values = series.loc[parsed.isna()].unique().tolist()[:5]
+        bad_values: list[str] = series.loc[parsed.isna()].unique().tolist()[:5]
         raise ValueError(
             f"Unparseable values encountered in '{column_name}': {bad_values}"
         )
@@ -194,13 +200,13 @@ def _clean_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
     :return: DataFrame with validated numeric columns.
     :raises ValueError: If numeric parsing fails or missing `unit_price` cannot be imputed.
     """
-    numeric_df = df.copy()
+    numeric_df: pd.DataFrame = df.copy()
 
     numeric_df["quantity"] = _parse_numeric_series(
         numeric_df["quantity"], "quantity"
     ).astype("int64")
 
-    price_num = _parse_numeric_series(
+    price_num: pd.Series = _parse_numeric_series(
         numeric_df["unit_price"], "unit_price", allow_unparseable=True
     )
     missing_price_count: int = int(price_num.isna().sum())
@@ -235,7 +241,7 @@ def _validate_dates(df: pd.DataFrame) -> pd.DataFrame:
     :raises ValueError: If any `order_date` cannot be parsed as YYYY-MM-DD.
     """
     date_df: pd.DataFrame = df.copy()
-    parsed_dates = pd.Series(
+    parsed_dates: pd.Series = pd.Series(
         pd.to_datetime(
             date_df["order_date"].str.strip(),
             format="%Y-%m-%d",
@@ -244,7 +250,9 @@ def _validate_dates(df: pd.DataFrame) -> pd.DataFrame:
         index=date_df.index,
     )
     if parsed_dates.isna().any():
-        bad_dates = date_df.loc[parsed_dates.isna(), "order_date"].unique().tolist()[:5]
+        bad_dates: list[str] = (
+            date_df.loc[parsed_dates.isna(), "order_date"].unique().tolist()[:5]
+        )
         raise ValueError(
             f"Invalid date format encountered in 'order_date': {bad_dates}"
         )
@@ -259,7 +267,7 @@ def clean_sales_data(raw_df: pd.DataFrame) -> pd.DataFrame:
     :param raw_df: Raw DataFrame loaded from `sales.csv`.
     :return: Cleaned DataFrame ready for revenue calculations.
     """
-    cleaned_df = (
+    cleaned_df: pd.DataFrame = (
         raw_df.pipe(_normalize_column_names)
         .pipe(_filter_valid_order_rows)
         .pipe(_normalize_text_columns)
@@ -279,7 +287,7 @@ def add_revenue_column(df: pd.DataFrame) -> pd.DataFrame:
     :return: DataFrame with an added `revenue` column.
     :raises ValueError: If `add_virtual_column` rejects the DataFrame or expression.
     """
-    revenue_df = add_virtual_column(df, _REVENUE_EXPRESSION, "revenue")
+    revenue_df: pd.DataFrame = add_virtual_column(df, _REVENUE_EXPRESSION, "revenue")
     if "revenue" not in revenue_df.columns:
         raise ValueError(
             f"Failed to compute 'revenue' column using expression '{_REVENUE_EXPRESSION}'."
